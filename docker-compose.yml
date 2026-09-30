@@ -1,0 +1,56 @@
+version: '3.6'
+
+services:
+  radar:
+    image: fabreguesm/flx-radarnormativo:staging
+    environment:
+      CLAUDE_CODE_OAUTH_TOKEN_FILE: /run/secrets/radar_claude_oauth_token
+      TEAMS_WEBHOOK_URL_FILE: /run/secrets/radar_teams_webhook_url
+    secrets:
+      - radar_claude_oauth_token
+      - radar_teams_webhook_url
+    volumes:
+      - 'radar_datos:/data'
+      - 'radar_trabajo:/app/trabajo'
+    deploy:
+      mode: replicated
+      replicas: 0
+      restart_policy:
+        condition: none
+      placement:
+        constraints: ["${NODE}"]
+      labels:
+        swarm.cronjob.enable: "true"
+        swarm.cronjob.schedule: "${RADAR_CRON:-0 30 8 * * 1-5}"
+        swarm.cronjob.skip-running: "true"
+    logging:
+      driver: loki
+      options:
+        loki-url: ${LOKI_URL}
+
+  swarm-cronjob:
+    image: crazymax/swarm-cronjob:latest
+    volumes:
+      - '/var/run/docker.sock:/var/run/docker.sock'
+    environment:
+      TZ: America/Argentina/Buenos_Aires
+      LOG_LEVEL: info
+    deploy:
+      placement:
+        constraints: [node.role == manager]
+    logging:
+      driver: loki
+      options:
+        loki-url: ${LOKI_URL}
+
+volumes:
+  radar_datos:
+    name: "${SERVICE_NAME}_datos"
+  radar_trabajo:
+    name: "${SERVICE_NAME}_trabajo"
+
+secrets:
+  radar_claude_oauth_token:
+    external: true
+  radar_teams_webhook_url:
+    external: true
